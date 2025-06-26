@@ -100,36 +100,16 @@ val_dataset = MultimodalDataset(val_df, subset='val', transform=None)
 test_dataset = MultimodalDataset(test_df, subset='test', transform=None)
 
 # %%
-def collate_fn(batch):
-    patient_ids = [item['patient_id'] for item in batch]
-    images = torch.stack([item['image'] for item in batch])
-    masks = torch.stack([item['mask'] for item in batch])
-    tabular = torch.stack([item['tabular'] for item in batch])
-    radiomics = torch.stack([item['radiomics'] for item in batch])
-    radiomics_imputed = torch.stack([item['radiomics_imputed'] for item in batch])
-    targets = torch.stack([item['target'] for item in batch])
-
-    return {
-        'patient_id': patient_ids,
-        'image': images,
-        'mask': masks,
-        'tabular': tabular,
-        'radiomics': radiomics,
-        'radiomics_imputed': radiomics_imputed,
-        'target': targets
-    }
-
-train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, collate_fn=collate_fn)
-val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, collate_fn=collate_fn)
-test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, collate_fn=collate_fn)
+train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
+test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 
 dataloaders = {'train': train_loader,
                'val': val_loader,
                'test': test_loader}
 # %%
-tab_dim = 43
-rad_dim = 102
-model = EarlyFusionModel(tab_dim=tab_dim, rad_dim=rad_dim, device=device)
+modality = config['modality']
+model = EarlyFusionModel(modality=modality, device=device)
 model.apply(deactivate_batchnorm)
 model.to(device)
 criterion = torch.nn.BCELoss()
@@ -153,7 +133,7 @@ if run is not None:
     run["best_model_path"].log(model_name)
 
 
-model = EarlyFusionModel(tab_dim=tab_dim, rad_dim=rad_dim, device=device)
+model = EarlyFusionModel(modality, device=device)
 model.apply(deactivate_batchnorm)
 model.load_state_dict(torch.load(model_name))
 model.to(device)
