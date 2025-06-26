@@ -16,12 +16,12 @@ def train(model, dataloader, criterion, optimizer, device, neptune_run, epoch):
     correct = 0
     total = 0
     for batch in dataloader:
-        image, tabular_feat, radiomics_feat, radiomics_imputed = batch['image'].to(device), batch['tabular'].to(device), batch['radiomics'].to(device), batch['radiomics_imputed'].to(device)
+        image, clinical_feat, radiomics_feat, metalesion_feat, radiomics_imputed = batch['image'].to(device), batch['clinical'].to(device), batch['radiomics'].to(device), batch['metalesion'].to(device), batch['radiomics_imputed'].to(device)
         target = batch['target'].to(device)
         target = target.unsqueeze(0)  
         for param in model.parameters():
             param.grad = None
-        outputs = model(image, tabular_feat, radiomics_feat, radiomics_imputed)
+        outputs = model(image, clinical_feat, radiomics_feat, metalesion_feat, radiomics_imputed)
         probs = torch.sigmoid(outputs.squeeze(0))
         loss = criterion(probs, target)
         loss.backward()
@@ -37,7 +37,7 @@ def train(model, dataloader, criterion, optimizer, device, neptune_run, epoch):
         neptune_run["train/epoch_loss"].log(epoch_loss)
         neptune_run["train/epoch_acc"].log(epoch_acc)
     print(f"Epoch {epoch} - Train Loss: {epoch_loss:.4f}, Accuracy: {epoch_acc:.4f}")
-
+    
 
 def validate(model, dataloader, criterion, device, neptune_run, epoch, fold_idx=None):
     model.eval()
@@ -47,10 +47,10 @@ def validate(model, dataloader, criterion, device, neptune_run, epoch, fold_idx=
     
     with torch.no_grad():
         for batch in dataloader:
-            image, tabular_feat, radiomics_feat, radiomics_imputed = batch['image'].to(device), batch['tabular'].to(device), batch['radiomics'].to(device), batch['radiomics_imputed'].to(device)
+            image, clinical_feat, radiomics_feat, metalesion_feat, radiomics_imputed = batch['image'].to(device), batch['clinical'].to(device), batch['radiomics'].to(device), batch['metalesion'].to(device), batch['radiomics_imputed'].to(device)
             target = batch['target'].to(device)
             target = target.unsqueeze(0) 
-            outputs = model(image, tabular_feat, radiomics_feat, radiomics_imputed)
+            outputs = model(image, clinical_feat, radiomics_feat, metalesion_feat, radiomics_imputed)
             probs = torch.sigmoid(outputs.squeeze(0))
             loss = criterion(probs, target)
             running_loss += loss.item()
@@ -81,10 +81,10 @@ def test(model, dataloader, device, neptune_run, fold_idx=None):
     
     with torch.no_grad():
         for batch in dataloader:
-            image, tabular_feat, radiomics_feat, radiomics_imputed = batch['image'].to(device), batch['tabular'].to(device), batch['radiomics'].to(device), batch['radiomics_imputed'].to(device)
+            image, clinical_feat, radiomics_feat, metalesion_feat, radiomics_imputed = batch['image'].to(device), batch['clinical'].to(device), batch['radiomics'].to(device), batch['metalesion'].to(device), batch['radiomics_imputed'].to(device)
             target = batch['target'].to(device)
             target = target.unsqueeze(0) 
-            outputs = model(image, tabular_feat, radiomics_feat, radiomics_imputed)
+            outputs = model(image, clinical_feat, radiomics_feat, metalesion_feat, radiomics_imputed)
             probs = torch.sigmoid(outputs.squeeze(0))
             preds = (probs.view(-1) > 0.5).float()
             correct += (preds == target).sum().item()
