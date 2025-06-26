@@ -140,34 +140,4 @@ model.to(device)
 test(model, dataloaders['test'], device, run)
 if run is not None:
     run.stop()
-
-
-
 # %%
-# # IDs with wrong laterality in annotations or DICOM files (checked manually)
-# def visualize_sample(dataset, index):
-#     sample = dataset[index]
-#     image = sample['image']
-#     mask = sample['mask']
-
-#     fig, ax = plt.subplots(1, 2, figsize=(12, 6))
-    
-#     ax[0].imshow(image.squeeze(), cmap='gray')
-#     ax[0].set_title("Image")
-#     ax[0].axis('off')
-    
-#     ax[1].imshow(mask.squeeze(), cmap='jet', alpha=0.6)
-#     ax[1].set_title("Mask")
-#     ax[1].axis('off')
-    
-#     plt.tight_layout()
-#     plt.show()
-
-# i = 0
-# for index, sample in enumerate(train_dataset):
-#     if i >= 5:  # Limit to first 5 samples
-#         break
-#     i += 1
-#     print(f"Patient ID: {sample['patient_id']}")
-#     print(f"Laterality L?: {sample['tabular'][1]}")
-#     visualize_sample(train_dataset, index)
