@@ -132,9 +132,8 @@ class EarlyFusionModel(nn.Module):
         instances = instances.to(self.device)
 
         image_feat, _ = self.mil(instances)
-
-        x = image_feat.squeeze(1)
-
+        x = image_feat.squeeze(0)
+        
         if self.modality == 'image-clinical':
             x = torch.cat([x, clinical_feat], dim=1)
 
@@ -151,4 +150,5 @@ class EarlyFusionModel(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)  # logits
+        print(f"Output shape: {x.shape}")
         return x

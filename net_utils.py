@@ -18,7 +18,6 @@ def train(model, dataloader, criterion, optimizer, device, neptune_run, epoch):
     for batch in dataloader:
         image, clinical_feat, radiomics_feat, metalesion_feat, radiomics_imputed = batch['image'].to(device), batch['clinical'].to(device), batch['radiomics'].to(device), batch['metalesion'].to(device), batch['radiomics_imputed'].to(device)
         target = batch['target'].to(device)
-        target = target.unsqueeze(0)  
         for param in model.parameters():
             param.grad = None
         outputs = model(image, clinical_feat, radiomics_feat, metalesion_feat, radiomics_imputed)
@@ -37,7 +36,7 @@ def train(model, dataloader, criterion, optimizer, device, neptune_run, epoch):
         neptune_run["train/epoch_loss"].log(epoch_loss)
         neptune_run["train/epoch_acc"].log(epoch_acc)
     print(f"Epoch {epoch} - Train Loss: {epoch_loss:.4f}, Accuracy: {epoch_acc:.4f}")
-    
+
 
 def validate(model, dataloader, criterion, device, neptune_run, epoch, fold_idx=None):
     model.eval()
@@ -49,7 +48,6 @@ def validate(model, dataloader, criterion, device, neptune_run, epoch, fold_idx=
         for batch in dataloader:
             image, clinical_feat, radiomics_feat, metalesion_feat, radiomics_imputed = batch['image'].to(device), batch['clinical'].to(device), batch['radiomics'].to(device), batch['metalesion'].to(device), batch['radiomics_imputed'].to(device)
             target = batch['target'].to(device)
-            target = target.unsqueeze(0) 
             outputs = model(image, clinical_feat, radiomics_feat, metalesion_feat, radiomics_imputed)
             probs = torch.sigmoid(outputs.squeeze(0))
             loss = criterion(probs, target)
@@ -83,7 +81,6 @@ def test(model, dataloader, device, neptune_run, fold_idx=None):
         for batch in dataloader:
             image, clinical_feat, radiomics_feat, metalesion_feat, radiomics_imputed = batch['image'].to(device), batch['clinical'].to(device), batch['radiomics'].to(device), batch['metalesion'].to(device), batch['radiomics_imputed'].to(device)
             target = batch['target'].to(device)
-            target = target.unsqueeze(0) 
             outputs = model(image, clinical_feat, radiomics_feat, metalesion_feat, radiomics_imputed)
             probs = torch.sigmoid(outputs.squeeze(0))
             preds = (probs.view(-1) > 0.5).float()

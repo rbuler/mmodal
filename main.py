@@ -44,11 +44,7 @@ with open(args.config_path) as file:
 
 if config["neptune"]:
     run = neptune.init_run(project="ProjektMMG/multimodal-fusion",)
-    run["sys/group_tags"].add(["baseline-img-only"])
-    # run["sys/group_tags"].add(["baseline-img-clinical"])
-    # run["sys/group_tags"].add(["baseline-img-clinical-radiomics"])
-    # run["sys/group_tags"].add(["baseline-img-clinical-radiomics-metalesion"])
-    
+    run["sys/group_tags"].add(config["modality"])
     run["config"] = config
 else:
     run = None
@@ -83,6 +79,11 @@ val_ids, test_ids = train_test_split(temp_ids, test_size=0.5, stratify=id_classi
 train_df = df_encoded[df_encoded["ID"].isin(train_ids)]
 val_df = df_encoded[df_encoded["ID"].isin(val_ids)]
 test_df = df_encoded[df_encoded["ID"].isin(test_ids)]
+
+if run:
+    run["train_ids"] = train_ids
+    run["val_ids"] = val_ids
+    run["test_ids"] = test_ids
 
 print(f"Train set size: {len(train_df)}")
 print(f"Validation set size: {len(val_df)}")
