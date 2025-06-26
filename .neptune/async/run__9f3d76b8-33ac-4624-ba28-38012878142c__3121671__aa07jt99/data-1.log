@@ -1,0 +1,24 @@
+{"obj": {"type": "AssignString", "path": ["sys", "description"], "value": ""}, "version": 1, "at": 1750863336.140397}
+{"obj": {"type": "AssignString", "path": ["monitoring", "75fea2e6", "hostname"], "value": "SVR-4090"}, "version": 2, "at": 1750863336.1405513}
+{"obj": {"type": "AssignString", "path": ["sys", "hostname"], "value": "SVR-4090"}, "version": 3, "at": 1750863336.1406024}
+{"obj": {"type": "AssignString", "path": ["monitoring", "75fea2e6", "pid"], "value": "3121671"}, "version": 4, "at": 1750863336.1406457}
+{"obj": {"type": "AssignString", "path": ["monitoring", "75fea2e6", "tid"], "value": "132797300721472"}, "version": 5, "at": 1750863336.1406858}
+{"obj": {"type": "AssignBool", "path": ["sys", "failed"], "value": false}, "version": 6, "at": 1750863336.1407325}
+{"obj": {"type": "AddStrings", "path": ["sys", "group_tags"], "values": ["no-BN"]}, "version": 7, "at": 1750863336.146835}
+{"obj": {"type": "AddStrings", "path": ["sys", "group_tags"], "values": ["ImageNet-norm"]}, "version": 8, "at": 1750863336.1469367}
+{"obj": {"type": "AddStrings", "path": ["sys", "group_tags"], "values": ["pre-softmax-do"]}, "version": 9, "at": 1750863336.1469817}
+{"obj": {"type": "AddStrings", "path": ["sys", "group_tags"], "values": ["XAI-EVAL"]}, "version": 10, "at": 1750863336.1470206}
+{"obj": {"type": "AssignBool", "path": ["config", "neptune"], "value": true}, "version": 11, "at": 1750863336.1471078}
+{"obj": {"type": "AssignInt", "path": ["config", "seed"], "value": 42}, "version": 12, "at": 1750863336.1471672}
+{"obj": {"type": "AssignString", "path": ["config", "device"], "value": "cuda:0"}, "version": 13, "at": 1750863336.1472144}
+{"obj": {"type": "AssignString", "path": ["config", "dir", "csv"], "value": "/media/dysk_a/jr_buler/TOMPEI-CCMD/TOMPEI-CMMD_clinical_data_v01_20250121.xlsx"}, "version": 14, "at": 1750863336.1472838}
+{"obj": {"type": "AssignString", "path": ["config", "dir", "csv_original"], "value": "/media/dysk_a/jr_buler/TheChineseMammographyDatabase/CMMD_clinicaldata_revision_CSV.csv"}, "version": 15, "at": 1750863336.1473277}
+{"obj": {"type": "AssignString", "path": ["config", "dir", "img"], "value": "/media/dysk_a/jr_buler/TheChineseMammographyDatabase/CMMD"}, "version": 16, "at": 1750863336.14737}
+{"obj": {"type": "AssignString", "path": ["config", "dir", "seg"], "value": "/media/dysk_a/jr_buler/TOMPEI-CCMD/TOMPEI-CMMD_v01_20250123/TOMPEI-CMMD_v01_20250123/"}, "version": 17, "at": 1750863336.1474078}
+{"obj": {"type": "AssignString", "path": ["config", "dir", "df"], "value": "/media/dysk_a/jr_buler/TOMPEI-CCMD/TOMPEI-CMMD_dataframe_v01_25062025.pkl"}, "version": 18, "at": 1750863336.1474462}
+{"obj": {"type": "AssignString", "path": ["config", "dir", "models"], "value": "/media/dysk_a/jr_buler/TOMPEI-CCMD/models"}, "version": 19, "at": 1750863336.1474888}
+{"obj": {"type": "AssignBool", "path": ["config", "radiomics", "extract"], "value": true}, "version": 20, "at": 1750863336.1475441}
+{"obj": {"type": "AssignString", "path": ["config", "radiomics", "mode"], "value": "parallel"}, "version": 21, "at": 1750863336.1475854}
+{"obj": {"type": "AssignBool", "path": ["config", "radiomics", "gray"], "value": true}, "version": 22, "at": 1750863336.1476204}
+{"obj": {"type": "AssignBool", "path": ["config", "radiomics", "rgb"], "value": true}, "version": 23, "at": 1750863336.1476567}
+{"obj": {"type": "AssignBool", "path": ["config", "radiomics", "save"], "value": true}, "version": 24, "at": 1750863336.1476967}

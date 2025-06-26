@@ -1,0 +1,20 @@
+neptune: True
+
+seed: 42
+device: 'cuda:0'
+
+dir:
+  csv:          "/media/dysk_a/jr_buler/TOMPEI-CCMD/TOMPEI-CMMD_clinical_data_v01_20250121.xlsx"
+  csv_original: "/media/dysk_a/jr_buler/TheChineseMammographyDatabase/CMMD_clinicaldata_revision_CSV.csv"
+  img:          "/media/dysk_a/jr_buler/TheChineseMammographyDatabase/CMMD"
+  seg:          "/media/dysk_a/jr_buler/TOMPEI-CCMD/TOMPEI-CMMD_v01_20250123/TOMPEI-CMMD_v01_20250123/"
+  df:           "/media/dysk_a/jr_buler/TOMPEI-CCMD/TOMPEI-CMMD_dataframe_v01_25062025.pkl"
+  
+model_path:       "/media/dysk_a/jr_buler/TOMPEI-CCMD/models"
+
+
+
+training_plan:
+  parameters:
+    patience: 10
+    epochs: 100
