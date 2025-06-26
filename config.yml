@@ -1,7 +1,13 @@
-neptune: True
+neptune: False
+
+modality: 'image' # 'image',
+                  # 'image-clinical',
+                  # 'image-clinical-radiomics',
+                  # 'image-clinical-radimics-metalesion'
+
 
 seed: 42
-device: 'cuda:0'
+device: 'cuda:1'
 
 dir:
   csv:          "/media/dysk_a/jr_buler/TOMPEI-CCMD/TOMPEI-CMMD_clinical_data_v01_20250121.xlsx"
