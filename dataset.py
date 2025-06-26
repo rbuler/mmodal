@@ -75,8 +75,9 @@ class MultimodalDataset(torch.utils.data.Dataset):
             'patient_id': patient_id,
             'image': torch.stack([torch.tensor(img, dtype=torch.float32)] * 3, dim=0),  # Convert to 3 x H x W
             'mask': torch.tensor(mask, dtype=torch.long),
-            'tabular': torch.tensor(tabular_feats, dtype=torch.float32),
+            'clinical': torch.tensor(tabular_feats[:7], dtype=torch.float32),
             'radiomics': torch.tensor(radiomic_feats, dtype=torch.float32),
+            'metalesion': torch.tensor(tabular_feats[7:], dtype=torch.float32),
             'radiomics_imputed': torch.tensor(radiomic_imputed, dtype=torch.float32),
             'target': torch.tensor(target, dtype=torch.float32),
         }
