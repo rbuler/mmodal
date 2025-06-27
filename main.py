@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import albumentations as A
 # import matplotlib.pyplot as plt
-from model import EarlyFusionModel
+from model import EarlyFusionModel, DecisionLevelLateFusionModel
 from net_utils import train, validate, test, EarlyStopping, deactivate_batchnorm
 from torch.utils.data import DataLoader
 from dataset import MultimodalDataset
@@ -80,7 +80,7 @@ train_df = df_encoded[df_encoded["ID"].isin(train_ids)]
 val_df = df_encoded[df_encoded["ID"].isin(val_ids)]
 test_df = df_encoded[df_encoded["ID"].isin(test_ids)]
 
-if run:
+if run is not None:
     run["train_ids"] = train_ids
     run["val_ids"] = val_ids
     run["test_ids"] = test_ids
@@ -111,6 +111,7 @@ dataloaders = {'train': train_loader,
 # %%
 modality = config['modality']
 model = EarlyFusionModel(modality=modality, device=device)
+model = DecisionLevelLateFusionModel(modality=modality, device=device)
 model.apply(deactivate_batchnorm)
 model.to(device)
 criterion = torch.nn.BCELoss()
@@ -135,6 +136,7 @@ if run is not None:
 
 
 model = EarlyFusionModel(modality, device=device)
+model = DecisionLevelLateFusionModel(modality=modality, device=device)
 model.apply(deactivate_batchnorm)
 model.load_state_dict(torch.load(model_name))
 model.to(device)
