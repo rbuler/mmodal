@@ -150,5 +150,4 @@ class EarlyFusionModel(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)  # logits
-        print(f"Output shape: {x.shape}")
         return x
