@@ -51,7 +51,7 @@ class MultimodalDataset(torch.utils.data.Dataset):
             radiomic_imputed = 0
         else:
             features = pd.DataFrame(np.zeros((1, 102)))
-            radiomic_imputed = 1
+            radiomic_imputed = random.choice([0, 1])
 
         tabular_feats = row.iloc[6:].values.astype(np.float32)
         radiomic_feats = features.values.astype(np.float32)
