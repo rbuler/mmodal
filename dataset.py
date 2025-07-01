@@ -60,6 +60,7 @@ class MultimodalDataset(torch.utils.data.Dataset):
         # TODO
         # apply dropout to tabular features only during training
         # maybe add fixed ids to be dropped out ?????
+        # think of the best way to do this
         dropout = 0.33
         if np.any(tabular_feats[7:] == 1) and self.subset == 'train':
             if random.random() < dropout:
