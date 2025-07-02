@@ -59,15 +59,14 @@ for id in df["ID"].unique():
         age_values = id_rows["Age"].dropna().unique()
         if len(age_values) == 1:
             df.loc[df["ID"] == id, "Age"] = age_values[0]
-
-data = pd.read_csv(csv_original_path, header=None)
-data = data[0].str.split(';', expand=True)
-data = data.iloc[:, :-1]
-data.columns = ['ID', 'LeftRight', 'Age', 'number', 'abnormality', 'classification', 'subtype']
+original_df = pd.read_csv(csv_original_path, header=None)
+original_df = original_df[0].str.split(';', expand=True)
+original_df = original_df.iloc[:, :-1]
+original_df.columns = ['ID', 'LeftRight', 'Age', 'number', 'abnormality', 'classification', 'subtype']
 
 for id in df["ID"].unique():
     if pd.isna(df.loc[df["ID"] == id, "Age"]).all():
-        age_from_data = data.loc[data["ID"] == id, "Age"].dropna().unique()
+        age_from_data = original_df.loc[original_df["ID"] == id, "Age"].dropna().unique()
         if len(age_from_data) == 1:
             df.loc[df["ID"] == id, "Age"] = age_from_data[0]
 
@@ -107,16 +106,20 @@ seg_df = pd.concat([seg_df, pd.DataFrame(rows)], ignore_index=True)
 seg_df = seg_df.sort_values(by="ID").reset_index(drop=True)
 
 
-simul_bg_mg = ["D1-0397",
-               "D1-0869",
-               "D2-0033",
-               "D2-0116",
-               "D2-0133",
-               "D2-0185",
-               "D2-0637"]
 
-df = df[~df["ID"].isin(simul_bg_mg)]
-seg_df = seg_df[~seg_df["ID"].isin(simul_bg_mg)]
+# %% 
+# drop patients with both benign and malignant lesions
+
+# simul_bg_mg = ["D1-0397",
+#                "D1-0869",
+#                "D2-0033",
+#                "D2-0116",
+#                "D2-0133",
+#                "D2-0185",
+#                "D2-0637"]
+
+# df = df[~df["ID"].isin(simul_bg_mg)]
+# seg_df = seg_df[~seg_df["ID"].isin(simul_bg_mg)]
 
 # %%
 
@@ -176,6 +179,24 @@ for id in wrong_laterality_ids:
                 right_path = right_row["image_path"].values[0]
                 image_df.loc[left_row.index, "image_path"] = right_path
                 image_df.loc[right_row.index, "image_path"] = left_path
+
+# %%
+# filter non malignant cases and add subtype information
+
+df = df[df["classification"].isin(["Malignant"])]
+df["subtype"] = None
+
+for index, row in df.iterrows():
+    matching_row = original_df[
+        (original_df["ID"] == row["ID"]) &
+        (original_df["LeftRight"] == row["LeftRight"]) &
+        (original_df["classification"] == row["classification"])
+    ]
+    if not matching_row.empty:
+        subtype_value = matching_row["subtype"].dropna().unique()
+        if len(subtype_value) == 1:
+            df.at[index, "subtype"] = subtype_value[0]
+df = df[df["subtype"].apply(lambda x: not isinstance(x, str) or len(x) > 0)]
 # %%
 
 if "view" not in df.columns:
@@ -227,74 +248,154 @@ cat_cols = [
     'Calcification_Distribution'
 ]
 
-for col in cat_cols:
-    counts = df[col].value_counts()
-    rare_values = counts[counts < 10].index
-    df[col] = df[col].replace(rare_values, "other")
-
-mass_margin_split = df["Mass_Margin"].str.split("/")
-all_labels = set(label for labels in mass_margin_split.dropna() for label in labels)
-
-for label in all_labels:
-    df[f"Mass_Margin_{label}"] = df["Mass_Margin"].apply(
-        lambda x: True if (isinstance(x, str) and label in x.split("/")) else False
-    )
-df = df.drop(columns=["Mass_Margin"])
-cat_cols = [c for c in cat_cols if c != "Mass_Margin"]
 
 
+# === Canonical label extraction for Mass_Margin ===
+def extract_mass_margin_labels(df, col_name="Mass_Margin"):
+    canonical_labels = [
+        "indistinct",
+        "spiculated",
+        "microlobulated",
+        "amorphous",
+        "circumscribed",
+        "obscured"
+    ]
+    
+    def clean_text(val):
+        if not isinstance(val, str):
+            return ""
+        return val.lower().strip()
+    
+    for label in canonical_labels:
+        col_flag = f"{col_name}_{label}"
+        df[col_flag] = df[col_name].apply(
+            lambda x: label in [s.strip() for s in clean_text(x).split("/")]
+        )
+    
+    return df.drop(columns=[col_name])
 
-calcification_morphology_split = df["Calcification_Morphology"].str.split("/")
-all_labels = set(label for labels in calcification_morphology_split.dropna() for label in labels)
 
-for label in all_labels:
-    df[f"Calcification_Morphology_{label}"] = df["Calcification_Morphology"].apply(
-        lambda x: True if (isinstance(x, str) and label in x.split("/")) else False
-    )
-df = df.drop(columns=["Calcification_Morphology"])
-cat_cols = [c for c in cat_cols if c != "Calcification_Morphology"]
+# === Canonical label extraction for Calcification_Morphology ===
+def extract_calcification_morphology_labels(df, col_name="Calcification_Morphology"):
+    canonical_labels = [
+        "pleomorphic",
+        "amorphous",
+        "fine and linear",
+        "small round"
+    ]
+    
+    def clean_text(val):
+        if not isinstance(val, str):
+            return ""
+        val = val.lower()
+        val = val.replace("calcification", "")  # remove word entirely
+        return val.strip()
+    
+    for label in canonical_labels:
+        col_flag = f"{col_name}_{label.replace(' ', '_')}"
+        df[col_flag] = df[col_name].apply(
+            lambda x: label in clean_text(x)
+        )
+    
+    return df.drop(columns=[col_name])
 
 
+def extract_mass_density_labels(df, col_name="Mass_Density"):
+    canonical_labels = ["low density", "equal density", "high density"]
+    
+    def clean_text(val):
+        if not isinstance(val, str):
+            return ""
+        return val.lower().strip()
+    
+    for label in canonical_labels:
+        col_flag = f"{col_name}_{label.replace(' ', '_')}"
+        df[col_flag] = df[col_name].apply(
+            lambda x: label in [s.strip() for s in clean_text(x).split("/")]
+        )
+    
+    return df.drop(columns=[col_name])
+
+df = extract_mass_density_labels(df, "Mass_Density")
+df = extract_mass_margin_labels(df, "Mass_Margin")
+df = extract_calcification_morphology_labels(df, "Calcification_Morphology")
+cat_cols = [c for c in cat_cols if c not in ["Mass_Margin", "Mass_Density", "Calcification_Morphology"]]
 df_encoded = pd.get_dummies(df, columns=cat_cols)
 
 # %%
 scaler = StandardScaler()
 df_encoded["Age"] = scaler.fit_transform(df_encoded[["Age"]])
-df_encoded["classification"] = df["classification"].replace({"Normal": 0, "Benign": 0, "Malignant": 1})
+df_encoded["classification"] = df["classification"].replace({"Normal": 0, "Benign": 1, "Malignant": 2})
+df_encoded["subtype"] = df["subtype"].replace({
+    "Luminal A": 0,
+    "Luminal B": 1,
+    "HER2-enriched": 2,
+    "triple negative": 3
+})
+non_predictive_columns = ['ID', 'view', 'classification', 'subtype', 'points', 'label', 'image_path']
+predictive_columns_order = [
+    'Age', 'LeftRight_L', 'LeftRight_R',
+    
+    'Breast density_extremely dense', 'Breast density_fatty',
+    'Breast density_heterogeneous dense', 'Breast density_scattered', 
+    
+    'Mass_Location_L', 'Mass_Location_M', 'Mass_Location_M-L', 'Mass_Location_S',
+    'Mass_Location_U', 'Mass_Location_U-M', 'Mass_Location_Whole area',
+    
+    'Mass_Shape_irregular', 'Mass_Shape_lobular', 'Mass_Shape_polygonal', 'Mass_Shape_round/oval',
+    
+    'Mass_Margin_spiculated', 'Mass_Margin_microlobulated', 'Mass_Margin_amorphous',
+    'Mass_Margin_circumscribed', 'Mass_Margin_obscured',
 
-desired_order = ['ID', 'image_path', 'view', 'classification', 'points', 'label', 'Age', 'LeftRight_L', 'LeftRight_R'] + \
-                [col for col in df_encoded.columns if col not in ['ID', 'image_path', 'view', 'points', 'label', 'classification', 'Age', 'LeftRight_L', 'LeftRight_R']]
+    'Mass_Density_low_density', 'Mass_Density_equal_density', 'Mass_Density_high_density',
+    'Mass_Margin_indistinct',
+    
+    'Calcification_Location_L', 'Calcification_Location_M', 'Calcification_Location_M-L',
+    'Calcification_Location_S', 'Calcification_Location_U', 'Calcification_Location_U-M',
+    'Calcification_Location_Whole area',
+
+    'Calcification_Morphology_pleomorphic', 'Calcification_Morphology_amorphous',
+    'Calcification_Morphology_fine_and_linear', 'Calcification_Morphology_small_round',
+    
+    'Calcification_Distribution_grouped', 'Calcification_Distribution_linear',
+    'Calcification_Distribution_regional', 'Calcification_Distribution_segmental',
+    'Calcification_Distribution_segmental/linear'
+]
+
+desired_order = non_predictive_columns + predictive_columns_order
 df_encoded = df_encoded[desired_order]
 
+desired_order = non_predictive_columns + predictive_columns_order
+df_encoded = df_encoded[desired_order]
 # %%
 
-# transform patient lvl dataframe to lesion lvl dataframe
-def split_rows(df):
-    new_rows = []
-    for _, row in df.iterrows():
-        points = row['points']
-        labels = row['label']
+# # transform patient lvl dataframe to lesion lvl dataframe
+# def split_rows(df):
+#     new_rows = []
+#     for _, row in df.iterrows():
+#         points = row['points']
+#         labels = row['label']
         
-        # If both lists are empty, keep the row as is
-        if len(points) == 0 and len(labels) == 0:
-            new_rows.append(row)
-        else:
-            # Create new rows for each element in the lists
-            for point, label in zip(points, labels):
-                new_row = row.copy()
-                new_row['points'] = point
-                new_row['label'] = label
-                new_rows.append(new_row)
+#         if len(points) == 0 and len(labels) == 0:
+#             new_rows.append(row)
+#         else:
+#             for point, label in zip(points, labels):
+#                 new_row = row.copy()
+#                 new_row['points'] = point
+#                 new_row['label'] = label
+#                 new_rows.append(new_row)
     
-    return pd.DataFrame(new_rows)
+#     return pd.DataFrame(new_rows)
 
-def fill_if_missing(x):
-    if x is None or (isinstance(x, float) and pd.isna(x)):
-        return ["None"]
-    return x
+# def fill_if_missing(x):
+#     if x is None or (isinstance(x, float) and pd.isna(x)):
+#         return ["None"]
+#     return x
 
-df_encoded = df_encoded.applymap(fill_if_missing)
-df_encoded = split_rows(df_encoded)
+# df_encoded = df_encoded.applymap(fill_if_missing)
+# df_encoded = split_rows(df_encoded)
+# %%
+df_encoded = df_encoded.dropna(subset=["subtype"])
 # %%
 
 # save the final dataframe to pkl file
