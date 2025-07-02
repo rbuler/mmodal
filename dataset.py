@@ -1,6 +1,5 @@
 import cv2
 import torch
-import random
 import pydicom
 import numpy as np
 import pandas as pd
@@ -14,10 +13,11 @@ def load_dicom(file_path):
 
 
 class MultimodalDataset(torch.utils.data.Dataset):
-    def __init__(self, df, subset: str, transform=None):
+    def __init__(self, df, subset: str, modality: str, transform=None):
         self.df = df.reset_index(drop=True)
         self.transform = transform
         self.subset = subset
+        self.modality = modality
         
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
@@ -25,15 +25,25 @@ class MultimodalDataset(torch.utils.data.Dataset):
         patient_id = row['ID']
         img = load_dicom(row['image_path'])
         
-        
         mask = np.zeros((img.shape[0], img.shape[1]), dtype=np.uint8)
-        flag = True
-        if row['points'] == "None":
-            flag = False
-        else:
-            points = row['points']
-            contour = np.array([[p['x'], p['y']] for p in points], dtype=np.int32)
-            cv2.fillPoly(mask, [contour], 1)
+        radiomic_feats_list = []
+        points = row['points']
+  
+        for lesion in points:  # iterate over each lesion
+            lesion_mask = np.zeros((img.shape[0], img.shape[1]), dtype=np.uint8)
+            contour = np.array([[p['x'], p['y']] for p in lesion], dtype=np.int32)
+            cv2.fillPoly(lesion_mask, [contour], 1)
+            
+            has_points = row['points'] != "None"
+            is_radiomics = 'radiomics' in self.modality
+            if has_points and is_radiomics:
+                extractor = RadiomicsExtractor(param_file='params.yml')
+                list_of_dicts = [{'image': img.numpy(), 'mask': lesion_mask}]
+                features = extractor.serial_extraction(list_of_dicts)
+                features = pd.DataFrame(features)
+                radiomic_feats_list.append(features.values.astype(np.float32))
+            
+            mask = cv2.bitwise_or(mask, lesion_mask)
 
         img = img.numpy()
         if self.transform and self.subset == 'train':
@@ -41,37 +51,17 @@ class MultimodalDataset(torch.utils.data.Dataset):
             img = transformed['image']
             mask = transformed['mask']
 
-        # TODO 
-        # add radiomics features extraction here
-        if flag:
-            extractor = RadiomicsExtractor(param_file='params.yml')
-            list_of_dicts = [{'image': img, 'mask': mask}]
-            features = extractor.serial_extraction(list_of_dicts)
-            features = pd.DataFrame(features)
-            radiomic_imputed = 0
+        if radiomic_feats_list:
+            radiomic_feats = np.concatenate(radiomic_feats_list, axis=0)
         else:
-            features = pd.DataFrame(np.zeros((1, 102)))
-            radiomic_imputed = random.choice([0, 1])
+            radiomic_feats = np.zeros((1,))
 
-        tabular_feats = row.iloc[6:].values.astype(np.float32)
-        radiomic_feats = features.values.astype(np.float32)
+        tabular_feats = row.iloc[7:].values.astype(np.float32)
         radiomic_feats = np.squeeze(radiomic_feats)
-
-        # TODO
-        # apply dropout to tabular features only during training
-        # maybe add fixed ids to be dropped out ?????
-        # think of the best way to do this
-        dropout = 0.33
-        if np.any(tabular_feats[7:] == 1) and self.subset == 'train':
-            if random.random() < dropout:
-                tabular_feats[7:] = 0
-                radiomic_feats[:] = 0
-                radiomic_imputed = 1
-
 
         img = img.astype(np.float32)
         img = img / 255.0  # Normalize to [0, 1]
-        target = row['classification'].astype(np.float32)
+        target = row['subtype'].astype(np.float32)
 
         return {
             'patient_id': patient_id,
@@ -80,7 +70,6 @@ class MultimodalDataset(torch.utils.data.Dataset):
             'clinical': torch.tensor(tabular_feats[:7], dtype=torch.float32),
             'radiomics': torch.tensor(radiomic_feats, dtype=torch.float32),
             'metalesion': torch.tensor(tabular_feats[7:], dtype=torch.float32),
-            'radiomics_imputed': torch.tensor(radiomic_imputed, dtype=torch.float32),
             'target': torch.tensor(target, dtype=torch.float32),
         }
 

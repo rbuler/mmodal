@@ -4,16 +4,6 @@ import torch.nn.functional as F
 import torchvision.models as models
 from image_patcher import ImagePatcher
 
-class Flatten(nn.Module):
-    def __init__(self, dim=1):
-        super().__init__()
-        self.dim = dim
-
-    def forward(self, x):
-        input_shape = x.shape
-        output_shape = [input_shape[i] for i in range(self.dim)] + [-1]
-        return x.view(*output_shape)
-
 class Identity(nn.Module):
     def __init__(self):
         super().__init__()
@@ -86,22 +76,32 @@ class GatedAttentionMIL(nn.Module):
         return Y, A
 
 
+class GatedAttentionMIL_Tabular(nn.Module):
+    def __init__(self, input_dim=102, num_classes=4):
+        super().__init__()
+        self.input_dim = input_dim
+        self.num_classes = num_classes
+   
+    def forward(self, x):
+        # TODO
+        # implement the forward pass for tabular data
+        return x
 
-class EarlyFusionModel(nn.Module):
+
+class HybridFusionModel(nn.Module):
     def __init__(self, modality, device, hidden_dim=128, out_dim=1):
-        super(EarlyFusionModel, self).__init__()
+        super(HybridFusionModel, self).__init__()
 
         self.modality = modality
         self.device = device
 
         self.mil = GatedAttentionMIL()
+        self.tab_mil = GatedAttentionMIL_Tabular()
 
         tab_dim = 7 if 'clinical' in modality else 0
         rad_dim = 102 if 'radiomics' in modality else 0
         metalesion_dim = 36 if 'metalesion' in modality else 0
-        mask_dim = 1 if 'radiomics' in modality else 0
-        total_dim = self.mil.D + tab_dim + rad_dim + metalesion_dim + mask_dim
-
+        total_dim = self.mil.D + tab_dim + rad_dim + metalesion_dim
         self.rad_norm = nn.LayerNorm(rad_dim) if rad_dim > 0 else None
 
         self.fc_layers = nn.Sequential(
@@ -120,7 +120,7 @@ class EarlyFusionModel(nn.Module):
         )
         self.patcher.get_tiles(2294, 1914)
 
-    def forward(self, image, clinical_feat=None, radiomics_feat=None, metalesion_feat=None, mask_feat=None):
+    def forward(self, image, clinical_feat=None, radiomics_feat=None, metalesion_feat=None):
 
         instances, _, _ = self.patcher.convert_img_to_bag(image.squeeze(0))
         instances = instances.unsqueeze(0).to(self.device)
@@ -132,8 +132,7 @@ class EarlyFusionModel(nn.Module):
             x = torch.cat([x, clinical_feat], dim=1)
         if 'radiomics' in self.modality:
             rad_normed = self.rad_norm(radiomics_feat) if self.rad_norm else radiomics_feat
-            mask_feat = mask_feat.unsqueeze(1)
-            x = torch.cat([x, rad_normed, mask_feat], dim=1)
+            x = torch.cat([x, rad_normed], dim=1)
         if 'metalesion' in self.modality:
             x = torch.cat([x, metalesion_feat], dim=1)
 
@@ -166,17 +165,12 @@ class DecisionLevelLateFusionModel(nn.Module):
         
         # radiomics branch with classifier
         if 'radiomics' in self.modality:
-            self.rad_dim = 102
             self.rad_norm = nn.LayerNorm(self.rad_dim)
+            self.tab_mil = GatedAttentionMIL_Tabular(input_dim=102, num_classes=4)
             self.radiomics_classifier = nn.Sequential(
                 nn.Linear(self.rad_dim, hidden_dim // 2),
                 nn.ReLU(),
                 nn.Linear(hidden_dim // 2, out_dim)
-            )
-            self.mask_classifier = nn.Sequential(
-                nn.Linear(1, hidden_dim // 8),
-                nn.ReLU(),
-                nn.Linear(hidden_dim // 8, out_dim)
             )
         
         # metalesion branch with classifier
@@ -188,9 +182,9 @@ class DecisionLevelLateFusionModel(nn.Module):
                 nn.Linear(hidden_dim // 2, out_dim)
             )
         
-        num_modalities = 1 + ('clinical' in modality) + ('radiomics' in modality) * 2 + ('metalesion' in modality)
+        num_modalities = ('image' in modality) + ('clinical' in modality) + ('radiomics' in modality) + ('metalesion' in modality)
         self.modality_weights = nn.Parameter(torch.ones(num_modalities))
-        
+        print(f"Number of modalities: {num_modalities}, Weights: {self.modality_weights}")
         self.patcher = ImagePatcher(patch_size=128,
                             overlap=0.5,
                             empty_thresh=0.75,
@@ -198,15 +192,16 @@ class DecisionLevelLateFusionModel(nn.Module):
         self.patcher.get_tiles(2294, 1914)
         self.device = device
     
-    def forward(self, image, clinical_feat=None, radiomics_feat=None, metalesion_feat=None, mask_feat=None):
+    def forward(self, image, clinical_feat=None, radiomics_feat=None, metalesion_feat=None):
 
         predictions = []
         
-        instances, _, _ = self.patcher.convert_img_to_bag(image.squeeze(0))
-        instances = instances.unsqueeze(0).to(self.device)
-        image_feat, _ = self.mil(instances)
-        image_pred = self.image_classifier(image_feat.squeeze(0))
-        predictions.append(image_pred)
+        if 'image' in self.modality:
+            instances, _, _ = self.patcher.convert_img_to_bag(image.squeeze(0))
+            instances = instances.unsqueeze(0).to(self.device)
+            image_feat, _ = self.mil(instances)
+            image_pred = self.image_classifier(image_feat.squeeze(0))
+            predictions.append(image_pred)
         
         if 'clinical' in self.modality:
             clinical_pred = self.clinical_classifier(clinical_feat)
@@ -216,10 +211,6 @@ class DecisionLevelLateFusionModel(nn.Module):
             rad_normed = self.rad_norm(radiomics_feat)
             radiomics_pred = self.radiomics_classifier(rad_normed)
             predictions.append(radiomics_pred)
-            
-            mask_feat = mask_feat.unsqueeze(1)
-            mask_pred = self.mask_classifier(mask_feat)
-            predictions.append(mask_pred)
         
         if 'metalesion' in self.modality:
             metalesion_pred = self.metalesion_classifier(metalesion_feat)

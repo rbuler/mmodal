@@ -12,11 +12,12 @@ import numpy as np
 import pandas as pd
 import albumentations as A
 # import matplotlib.pyplot as plt
-from model import EarlyFusionModel, DecisionLevelLateFusionModel
+from model import HybridFusionModel, DecisionLevelLateFusionModel
 from net_utils import train, validate, test, EarlyStopping, deactivate_batchnorm
 from torch.utils.data import DataLoader
 from dataset import MultimodalDataset
 from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedKFold
 
 warnings.filterwarnings('ignore')
 
@@ -38,14 +39,19 @@ def get_args_parser(path: typing.Union[str, bytes, os.PathLike]):
 
 
 parser = get_args_parser('config.yml')
+# parser.add_argument("--fold", type=int, default=None)
 args, unknown = parser.parse_known_args()
 with open(args.config_path) as file:
     config = yaml.load(file, Loader=yaml.FullLoader)
+
+# current_fold = args.fold if args.fold else config['fold']
+current_fold = config['training_plan']['parameters']['fold']
 
 if config["neptune"]:
     run = neptune.init_run(project="ProjektMMG/multimodal-fusion",)
     run["sys/group_tags"].add(config["modality"])
     run["config"] = config
+    run['train/current_fold'] = current_fold
 else:
     run = None
 
@@ -59,35 +65,26 @@ device = config['device'] if torch.cuda.is_available() else 'cpu'
 # LOAD DATA -------------------------------------------------------------
 df_encoded = pd.read_pickle(config['dir']['df'])
 # %%
-fixed_columns = df_encoded.columns[:6]
-additional_fixed_columns = ['LeftRight_L', 'LeftRight_R']
-remaining_columns = [col for col in df_encoded.columns[6:] if col not in additional_fixed_columns]
-remaining_columns = sorted(remaining_columns)
-df_encoded = df_encoded[list(fixed_columns) + additional_fixed_columns + remaining_columns]
 
-# %%
-
-# TODO 
-# implement cross-validation
-
+test_size = 0.2
 unique_ids = df_encoded["ID"].unique()
-id_classification_map = df_encoded.groupby("ID")["classification"].first()
+id_classification_map = df_encoded.groupby("ID")["subtype"].first()
 
-train_ids, temp_ids = train_test_split(unique_ids, test_size=0.3, stratify=id_classification_map[unique_ids], random_state=seed)
-val_ids, test_ids = train_test_split(temp_ids, test_size=0.5, stratify=id_classification_map[temp_ids], random_state=seed)
+train_val_ids, test_ids = train_test_split(
+    unique_ids, test_size=test_size, stratify=id_classification_map[unique_ids], random_state=seed)
 
-train_df = df_encoded[df_encoded["ID"].isin(train_ids)]
-val_df = df_encoded[df_encoded["ID"].isin(val_ids)]
 test_df = df_encoded[df_encoded["ID"].isin(test_ids)]
+train_val_df = df_encoded[df_encoded["ID"].isin(train_val_ids)]
 
-if run is not None:
-    run["train_ids"] = train_ids
-    run["val_ids"] = val_ids
-    run["test_ids"] = test_ids
+SPLITS = 10
+if run:
+    run['train/splits'] = SPLITS
 
-print(f"Train set size: {len(train_df)}")
-print(f"Validation set size: {len(val_df)}")
+kf = StratifiedKFold(n_splits=SPLITS, shuffle=True, random_state=seed)
+folds = list(kf.split(train_val_ids, id_classification_map[train_val_ids]))
+
 print(f"Test set size: {len(test_df)}")
+print(f"Number of folds: {len(folds)}")
 
 # %%
 # TODO
@@ -96,9 +93,19 @@ train_transforms = A.Compose([
     A.Flip(p=0.5),
     A.VerticalFlip(p=0.5)
 ])
-train_dataset = MultimodalDataset(train_df, subset='train', transform=train_transforms)
-val_dataset = MultimodalDataset(val_df, subset='val', transform=None)
-test_dataset = MultimodalDataset(test_df, subset='test', transform=None)
+modality = config['modality']
+
+for fold_idx, (train_idx, val_idx) in enumerate(folds):
+    if fold_idx != current_fold:
+        continue
+    train_ids = train_val_ids[train_idx]
+    val_ids = train_val_ids[val_idx]
+    train_df = df_encoded[df_encoded["ID"].isin(train_ids)]
+    val_df = df_encoded[df_encoded["ID"].isin(val_ids)]
+
+train_dataset = MultimodalDataset(train_df, subset='train', modality=modality, transform=train_transforms)
+val_dataset = MultimodalDataset(val_df, subset='val', modality=modality, transform=None)
+test_dataset = MultimodalDataset(test_df, subset='test', modality=modality, transform=None)
 
 # %%
 train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
@@ -109,12 +116,11 @@ dataloaders = {'train': train_loader,
                'val': val_loader,
                'test': test_loader}
 # %%
-modality = config['modality']
-model = EarlyFusionModel(modality=modality, device=device)
+model = HybridFusionModel(modality=modality, device=device)
 model = DecisionLevelLateFusionModel(modality=modality, device=device)
 model.apply(deactivate_batchnorm)
 model.to(device)
-criterion = torch.nn.BCELoss()
+criterion = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5)
 
 # %%
@@ -135,7 +141,7 @@ if run is not None:
     run["best_model_path"].log(model_name)
 
 
-model = EarlyFusionModel(modality, device=device)
+model = HybridFusionModel(modality, device=device)
 model = DecisionLevelLateFusionModel(modality=modality, device=device)
 model.apply(deactivate_batchnorm)
 model.load_state_dict(torch.load(model_name))
