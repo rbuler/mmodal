@@ -21,13 +21,15 @@ def train(model, dataloader, criterion, optimizer, device, neptune_run, epoch):
         for param in model.parameters():
             param.grad = None
         outputs = model(image, clinical_feat, radiomics_feat, metalesion_feat)
-        probs = torch.sigmoid(outputs.squeeze(0))
-        loss = criterion(probs, target)
+
+        loss = criterion(outputs, target)
         loss.backward()
         optimizer.step()
         running_loss += loss.item()
-        preds = (probs.view(-1) > 0.5).float()
+
+        preds = torch.argmax(outputs, dim=1)
         correct += (preds == target).sum().item()
+
         total += target.size(0)
     epoch_loss = running_loss / len(dataloader)
     epoch_acc = correct / total
@@ -49,10 +51,10 @@ def validate(model, dataloader, criterion, device, neptune_run, epoch, fold_idx=
             image, clinical_feat, radiomics_feat, metalesion_feat = batch['image'].to(device), batch['clinical'].to(device), batch['radiomics'].to(device), batch['metalesion'].to(device)
             target = batch['target'].to(device)
             outputs = model(image, clinical_feat, radiomics_feat, metalesion_feat)
-            probs = torch.sigmoid(outputs.squeeze(0))
-            loss = criterion(probs, target)
+            loss = criterion(outputs, target)
             running_loss += loss.item()
-            preds = (probs.view(-1) > 0.5).float()
+
+            preds = torch.argmax(outputs, dim=1)
             correct += (preds == target).sum().item()
             total += target.size(0)
     epoch_loss = running_loss / len(dataloader)
@@ -82,8 +84,7 @@ def test(model, dataloader, device, neptune_run, fold_idx=None):
             image, clinical_feat, radiomics_feat, metalesion_feat = batch['image'].to(device), batch['clinical'].to(device), batch['radiomics'].to(device), batch['metalesion'].to(device)
             target = batch['target'].to(device)
             outputs = model(image, clinical_feat, radiomics_feat, metalesion_feat)
-            probs = torch.sigmoid(outputs.squeeze(0))
-            preds = (probs.view(-1) > 0.5).float()
+            preds = torch.argmax(outputs, dim=1)
             correct += (preds == target).sum().item()
             total += target.size(0)
             all_preds.extend(preds.cpu().numpy())
