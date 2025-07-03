@@ -116,8 +116,10 @@ dataloaders = {'train': train_loader,
                'val': val_loader,
                'test': test_loader}
 # %%
-model = HybridFusionModel(modality=modality, device=device)
-model = DecisionLevelLateFusionModel(modality=modality, device=device)
+if config['training_plan']['fusion'] == 'hybrid':
+    model = HybridFusionModel(modality=modality, device=device)
+elif config['training_plan']['fusion'] == 'late':
+    model = DecisionLevelLateFusionModel(modality=modality, out_dim=4, device=device)
 model.apply(deactivate_batchnorm)
 model.to(device)
 criterion = torch.nn.CrossEntropyLoss()
@@ -141,8 +143,10 @@ if run is not None:
     run["best_model_path"].log(model_name)
 
 
-model = HybridFusionModel(modality, device=device)
-model = DecisionLevelLateFusionModel(modality=modality, device=device)
+if config['training_plan']['fusion'] == 'hybrid':
+    model = HybridFusionModel(modality=modality, device=device)
+elif config['training_plan']['fusion'] == 'late':
+    model = DecisionLevelLateFusionModel(modality=modality, out_dim=4, device=device)
 model.apply(deactivate_batchnorm)
 model.load_state_dict(torch.load(model_name))
 model.to(device)
