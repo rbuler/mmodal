@@ -57,8 +57,7 @@ class MultimodalDataset(torch.utils.data.Dataset):
             radiomic_feats = np.zeros((1,))
 
         tabular_feats = row.iloc[7:].values.astype(np.float32)
-        radiomic_feats = np.squeeze(radiomic_feats)
-
+        # radiomic_feats = np.squeeze(radiomic_feats)
         img = img.astype(np.float32)
         img = img / 255.0  # Normalize to [0, 1]
         target = row['subtype'].astype(np.float32)
@@ -70,7 +69,7 @@ class MultimodalDataset(torch.utils.data.Dataset):
             'clinical': torch.tensor(tabular_feats[:7], dtype=torch.float32),
             'radiomics': torch.tensor(radiomic_feats, dtype=torch.float32),
             'metalesion': torch.tensor(tabular_feats[7:], dtype=torch.float32),
-            'target': torch.tensor(target, dtype=torch.float32),
+            'target': torch.tensor(target, dtype=torch.long),
         }
 
     def __len__(self):
