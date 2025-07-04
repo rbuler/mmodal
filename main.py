@@ -91,9 +91,14 @@ print(f"Number of folds: {len(folds)}")
 # TODO
 # implement transforms for tabular data
 train_transforms = A.Compose([
-    A.HorizontalFlip(p=0.5),
-    A.VerticalFlip(p=0.5)
-])
+            A.HorizontalFlip(p=0.5),
+            A.RandomBrightnessContrast(brightness_limit=0.05, contrast_limit=0.05, p=0.5),
+            A.ShiftScaleRotate(shift_limit=0.01, scale_limit=0.02, rotate_limit=3, p=0.5),
+            A.GaussNoise(var_limit=(5.0, 15.0), p=0.3),
+            A.CLAHE(clip_limit=2.0, tile_grid_size=(48, 48), p=0.3),
+        ])
+
+
 modality = config['modality']
 
 for fold_idx, (train_idx, val_idx) in enumerate(folds):

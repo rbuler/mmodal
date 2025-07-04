@@ -45,7 +45,7 @@ class MultimodalDataset(torch.utils.data.Dataset):
             
             mask = cv2.bitwise_or(mask, lesion_mask)
 
-        img = img.numpy()
+        img = img.numpy().astype(np.uint8)
         if self.transform and self.subset == 'train':
             transformed = self.transform(image=img, mask=mask)
             img = transformed['image']
