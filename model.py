@@ -317,9 +317,14 @@ class IntermediateFusionModel(nn.Module):
         if 'clinical' in self.modality:
             clinical_feat = self.cli_mlp(clinical_feat)
             clinical_feat = clinical_feat.unsqueeze(1).repeat(1, self.out_dim, 1)  # [1, 4, clin_feat_dim]
+        else:
+            clinical_feat = None
+
         if 'metalesion' in self.modality:
             metalesion_feat = self.meta_mlp(metalesion_feat)
             metalesion_feat = metalesion_feat.unsqueeze(1).repeat(1, self.out_dim, 1)  # [1, 4, meta_feat_dim]
+        else:
+            metalesion_feat = None
 
         # --- Fuse all features per class ---
         fused = []
