@@ -50,6 +50,11 @@ current_fold = config['training_plan']['parameters']['fold']
 if config["neptune"]:
     run = neptune.init_run(project="ProjektMMG/multimodal-fusion",)
     run["sys/group_tags"].add(config["modality"])
+    if ['radiomics', 'clinical', 'metalesion'] not in config["modality"]:
+        run["sys/group_tags"].add('baseline')
+    else:
+        run["sys/group_tags"].add(config['training_plan']['fusion'])
+    
     run["config"] = config
     run['train/current_fold'] = current_fold
 else:
