@@ -66,7 +66,7 @@ device = config['device'] if torch.cuda.is_available() else 'cpu'
 df_encoded = pd.read_pickle(config['dir']['df'])
 # %%
 
-test_size = 0.2
+test_size = 0.15
 unique_ids = df_encoded["ID"].unique()
 id_classification_map = df_encoded.groupby("ID")["subtype"].first()
 
@@ -83,6 +83,7 @@ if run:
 kf = StratifiedKFold(n_splits=SPLITS, shuffle=True, random_state=seed)
 folds = list(kf.split(train_val_ids, id_classification_map[train_val_ids]))
 
+print(f"Train/Val set size: {len(train_val_df)}")
 print(f"Test set size: {len(test_df)}")
 print(f"Number of folds: {len(folds)}")
 

@@ -274,10 +274,14 @@ class HybridFusionModel(nn.Module):
         # Feature sizes
         self.image_feat_dim = self.mil.L  # usually 512
         self.rad_feat_dim = hidden_dim if 'radiomics' in modality else 0
-        self.clin_feat_dim = 7 if 'clinical' in modality else 0
-        self.meta_feat_dim = 36 if 'metalesion' in modality else 0
+        self.clin_feat_dim = 8 if 'clinical' in modality else 0
+        self.meta_feat_dim = 16 if 'metalesion' in modality else 0
 
         self.rad_norm = nn.LayerNorm(102) if 'radiomics' in modality else None
+
+
+        self.cli_mlp = nn.Sequential(nn.Linear(7, self.clin_feat_dim), nn.ReLU())
+        self.meta_mlp = nn.Sequential(nn.Linear(36, self.meta_feat_dim), nn.ReLU())
 
         # Per-class fusion classifiers
         self.classifiers = nn.ModuleList([
@@ -311,9 +315,11 @@ class HybridFusionModel(nn.Module):
 
         # Expand clinical/meta to per-class
         if 'clinical' in self.modality:
-            clinical_feat = clinical_feat.unsqueeze(1).repeat(1, self.out_dim, 1)  # [1, 4, 7]
+            clinical_feat = self.cli_mlp(clinical_feat)
+            clinical_feat = clinical_feat.unsqueeze(1).repeat(1, self.out_dim, 1)  # [1, 4, clin_feat_dim]
         if 'metalesion' in self.modality:
-            metalesion_feat = metalesion_feat.unsqueeze(1).repeat(1, self.out_dim, 1)  # [1, 4, 36]
+            metalesion_feat = self.meta_mlp(metalesion_feat)
+            metalesion_feat = metalesion_feat.unsqueeze(1).repeat(1, self.out_dim, 1)  # [1, 4, meta_feat_dim]
 
         # --- Fuse all features per class ---
         fused = []
@@ -328,7 +334,7 @@ class HybridFusionModel(nn.Module):
             fused.append(fused_i)
 
         fused = torch.stack(fused, dim=1)  # [1, 4, D]
-
+        print(fused.shape)
         # --- Classifiers ---
         out = [self.classifiers[i](fused[:, i, :]) for i in range(self.out_dim)]  # 4 × [1, 1]
         out = torch.cat(out, dim=-1)  # [1, 4]
