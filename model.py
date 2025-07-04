@@ -339,7 +339,6 @@ class IntermediateFusionModel(nn.Module):
             fused.append(fused_i)
 
         fused = torch.stack(fused, dim=1)  # [1, 4, D]
-        print(fused.shape)
         # --- Classifiers ---
         out = [self.classifiers[i](fused[:, i, :]) for i in range(self.out_dim)]  # 4 × [1, 1]
         out = torch.cat(out, dim=-1)  # [1, 4]
