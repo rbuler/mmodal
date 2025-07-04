@@ -294,7 +294,7 @@ class IntermediateFusionModel(nn.Module):
         # Optional patcher for MIL image inputs
         self.patcher = ImagePatcher(
             patch_size=128,
-            overlap=0.5,
+            overlap=0.75,
             empty_thresh=0.75,
             bag_size=-1
         )
@@ -384,7 +384,7 @@ class DecisionLevelLateFusionModel(nn.Module):
         num_modalities = ('image' in modality) + ('clinical' in modality) + ('radiomics' in modality) + ('metalesion' in modality)
         self.modality_weights = nn.Parameter(torch.ones(num_modalities))
         self.patcher = ImagePatcher(patch_size=128,
-                            overlap=0.5,
+                            overlap=0.75,
                             empty_thresh=0.75,
                             bag_size=-1)
         self.patcher.get_tiles(2294, 1914)
