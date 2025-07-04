@@ -90,7 +90,8 @@ def test(model, dataloader, device, neptune_run, fold_idx=None):
             all_preds.extend(preds.cpu().numpy())
             all_targets.extend(target.cpu().numpy())
     test_acc = correct / total
-    report = classification_report(all_targets, all_preds, target_names=["Negative", "Positive"])
+    target_names = ["Luminal A", "Luminal B", "HER2-enriched", "triple negative"]
+    report = classification_report(all_targets, all_preds, target_names=target_names)
     if not fold_idx:
         if neptune_run is not None:
             neptune_run["test/accuracy"].log(test_acc)
