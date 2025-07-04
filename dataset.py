@@ -60,7 +60,7 @@ class MultimodalDataset(torch.utils.data.Dataset):
         # radiomic_feats = np.squeeze(radiomic_feats)
         img = img.astype(np.float32)
         img = img / 255.0  # Normalize to [0, 1]
-        target = row['subtype'].astype(np.float32)
+        target = row['subtype'].astype(np.int64)
 
         return {
             'patient_id': patient_id,
