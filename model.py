@@ -259,9 +259,9 @@ class MultiHeadGatedAttentionMIL(nn.Module):
         return Y, M
 
 
-class HybridFusionModel(nn.Module):
+class IntermediateFusionModel(nn.Module):
     def __init__(self, modality, device, hidden_dim=128, out_dim=4):
-        super(HybridFusionModel, self).__init__()
+        super(IntermediateFusionModel, self).__init__()
 
         self.modality = modality
         self.device = device

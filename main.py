@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import albumentations as A
 # import matplotlib.pyplot as plt
-from model import HybridFusionModel, DecisionLevelLateFusionModel
+from model import IntermediateFusionModel, DecisionLevelLateFusionModel
 from net_utils import train, validate, test, EarlyStopping, deactivate_batchnorm
 from torch.utils.data import DataLoader
 from dataset import MultimodalDataset
@@ -91,7 +91,7 @@ print(f"Number of folds: {len(folds)}")
 # TODO
 # implement transforms for tabular data
 train_transforms = A.Compose([
-    A.Flip(p=0.5),
+    A.HorizontalFlip(p=0.5),
     A.VerticalFlip(p=0.5)
 ])
 modality = config['modality']
@@ -101,6 +101,12 @@ for fold_idx, (train_idx, val_idx) in enumerate(folds):
         continue
     train_ids = train_val_ids[train_idx]
     val_ids = train_val_ids[val_idx]
+
+    if run:
+        run[f'train/ids/fold_{fold_idx}'] = train_ids.tolist()
+        run[f'val/ids/fold_{fold_idx}'] = val_ids.tolist()
+        run['test/ids'] = test_ids.tolist()
+
     train_df = df_encoded[df_encoded["ID"].isin(train_ids)]
     val_df = df_encoded[df_encoded["ID"].isin(val_ids)]
 
@@ -117,8 +123,8 @@ dataloaders = {'train': train_loader,
                'val': val_loader,
                'test': test_loader}
 # %%
-if config['training_plan']['fusion'] == 'hybrid':
-    model = HybridFusionModel(modality=modality, device=device)
+if config['training_plan']['fusion'] == 'intermediate':
+    model = IntermediateFusionModel(modality=modality, device=device)
 elif config['training_plan']['fusion'] == 'late':
     model = DecisionLevelLateFusionModel(modality=modality, out_dim=4, device=device)
 model.apply(deactivate_batchnorm)
@@ -144,8 +150,8 @@ if run is not None:
     run["best_model_path"].log(model_name)
 
 
-if config['training_plan']['fusion'] == 'hybrid':
-    model = HybridFusionModel(modality=modality, device=device)
+if config['training_plan']['fusion'] == 'intermediate':
+    model = IntermediateFusionModel(modality=modality, device=device)
 elif config['training_plan']['fusion'] == 'late':
     model = DecisionLevelLateFusionModel(modality=modality, out_dim=4, device=device)
 model.apply(deactivate_batchnorm)
