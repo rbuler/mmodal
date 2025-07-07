@@ -81,8 +81,8 @@ class GatedAttentionMIL_Tabular(nn.Module):
         self,
         input_dim=102,
         num_classes=4,
-        hidden_dim=128,
-        attention_dim=64,
+        hidden_dim=256,
+        attention_dim=128,
         feature_dropout=0.1,
         attention_dropout=0.1,
         shared_attention=False,
@@ -260,41 +260,46 @@ class MultiHeadGatedAttentionMIL(nn.Module):
 
 
 class IntermediateFusionModel(nn.Module):
-    def __init__(self, modality, device, hidden_dim=128, out_dim=4):
+    def __init__(self, modality, device, hidden_dim=256, out_dim=4):
         super(IntermediateFusionModel, self).__init__()
 
         self.modality = modality
         self.device = device
         self.out_dim = out_dim
-
-        # MIL branches
         self.mil = MultiHeadGatedAttentionMIL(num_classes=out_dim)
-        self.tab_mil = GatedAttentionMIL_Tabular(input_dim=102, num_classes=out_dim)
+        self.tab_mil = GatedAttentionMIL_Tabular(input_dim=800, hidden_dim=hidden_dim, num_classes=out_dim)
 
-        # Feature sizes
         self.image_feat_dim = self.mil.L  # usually 512
-        self.rad_feat_dim = hidden_dim if 'radiomics' in modality else 0
+        self.rad_feat_dim = 256 if 'radiomics' in modality else 0
         self.clin_feat_dim = 8 if 'clinical' in modality else 0
         self.meta_feat_dim = 16 if 'metalesion' in modality else 0
-
-        self.rad_norm = nn.LayerNorm(102) if 'radiomics' in modality else None
 
 
         self.cli_mlp = nn.Sequential(nn.Linear(7, self.clin_feat_dim), nn.ReLU())
         self.meta_mlp = nn.Sequential(nn.Linear(36, self.meta_feat_dim), nn.ReLU())
 
-        # Per-class fusion classifiers
+        self.fusion_input_dim = (
+            self.image_feat_dim +
+            self.rad_feat_dim +
+            self.clin_feat_dim +
+            self.meta_feat_dim
+        )
+
+        self.fusion_mlp = nn.Sequential(
+            nn.Linear(self.fusion_input_dim, 256),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(256, 128),
+            nn.ReLU()
+        )
+
         self.classifiers = nn.ModuleList([
-            nn.Linear(
-                self.image_feat_dim + self.rad_feat_dim + self.clin_feat_dim + self.meta_feat_dim,
-                1
-            ) for _ in range(out_dim)
+            nn.Linear(128, 1) for _ in range(out_dim)
         ])
 
-        # Optional patcher for MIL image inputs
         self.patcher = ImagePatcher(
             patch_size=128,
-            overlap=0.75,
+            overlap=0.5,
             empty_thresh=0.75,
             bag_size=-1
         )
@@ -302,47 +307,48 @@ class IntermediateFusionModel(nn.Module):
 
     def forward(self, image, clinical_feat=None, radiomics_feat=None, metalesion_feat=None):
         # --- Image MIL ---
-        instances, _, _ = self.patcher.convert_img_to_bag(image.squeeze(0))  # shape: [num_patches, C, H, W]
-        instances = instances.unsqueeze(0).to(self.device)  # shape: [1, num_patches, C, H, W]
-        _, image_feats = self.mil(instances)  # image_feats: [1, 4, 512]
+        instances, _, _ = self.patcher.convert_img_to_bag(image.squeeze(0))
+        instances = instances.unsqueeze(0).to(self.device)
+
+        # normalize instances with IMAGENET mean and std
+        instances = (instances - torch.tensor([0.485, 0.456, 0.406], device=self.device).view(1, 3, 1, 1)) / \
+                     torch.tensor([0.229, 0.224, 0.225], device=self.device).view(1, 3, 1, 1)
+
+        _, image_feats = self.mil(instances)  # [1, 4, 512]
 
         # --- Radiomics MIL ---
+        rad_feats = None
         if 'radiomics' in self.modality:
-            rad_normed = self.rad_norm(radiomics_feat) if self.rad_norm else radiomics_feat  # [1, n, 102]
-            _, rad_feats = self.tab_mil(rad_normed)  # rad_feats: [1, 4, 128]
-        else:
-            rad_feats = None
+            _, rad_feats = self.tab_mil(radiomics_feat)  # [1, 4, 128]
 
-        # Expand clinical/meta to per-class
+        # --- Clinical ---
         if 'clinical' in self.modality:
             clinical_feat = self.cli_mlp(clinical_feat)
-            clinical_feat = clinical_feat.unsqueeze(1).repeat(1, self.out_dim, 1)  # [1, 4, clin_feat_dim]
+            clinical_feat = clinical_feat.unsqueeze(1).repeat(1, self.out_dim, 1)
         else:
             clinical_feat = None
 
+        # --- Metalesion ---
         if 'metalesion' in self.modality:
             metalesion_feat = self.meta_mlp(metalesion_feat)
-            metalesion_feat = metalesion_feat.unsqueeze(1).repeat(1, self.out_dim, 1)  # [1, 4, meta_feat_dim]
+            metalesion_feat = metalesion_feat.unsqueeze(1).repeat(1, self.out_dim, 1)
         else:
             metalesion_feat = None
 
-        # --- Fuse all features per class ---
-        fused = []
+        # --- Fusion per class ---
+        out = []
         for i in range(self.out_dim):
             img_i = image_feats[:, i, :]  # [1, 512]
             rad_i = rad_feats[:, i, :] if rad_feats is not None else torch.empty(0, device=self.device)
             clin_i = clinical_feat[:, i, :] if clinical_feat is not None else torch.empty(0, device=self.device)
             meta_i = metalesion_feat[:, i, :] if metalesion_feat is not None else torch.empty(0, device=self.device)
 
-            # Concatenate per-class fused vector
-            fused_i = torch.cat([x for x in [img_i, rad_i, clin_i, meta_i] if x.numel() > 0], dim=-1)  # [1, D]
-            fused.append(fused_i)
+            fused_i = torch.cat([x for x in [img_i, rad_i, clin_i, meta_i] if x.numel() > 0], dim=-1)
+            fused_i = self.fusion_mlp(fused_i)  # [1, 128]
+            out_i = self.classifiers[i](fused_i)  # [1, 1]
+            out.append(out_i)
 
-        fused = torch.stack(fused, dim=1)  # [1, 4, D]
-        # --- Classifiers ---
-        out = [self.classifiers[i](fused[:, i, :]) for i in range(self.out_dim)]  # 4 × [1, 1]
-        out = torch.cat(out, dim=-1)  # [1, 4]
-
+        out = torch.cat(out, dim=-1)
         return out
 
 
@@ -354,31 +360,27 @@ class DecisionLevelLateFusionModel(nn.Module):
         self.device = device
         
         # image branch (MIL) with classifier
-        self.mil = MultiHeadGatedAttentionMIL()
-        self.image_classifier = nn.Sequential(
-            nn.Linear(self.mil.D, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, out_dim))
-        
+        self.mil = MultiHeadGatedAttentionMIL(num_classes=out_dim)
+
         # clinical branch with classifier
         if 'clinical' in self.modality:
             self.clinical_classifier = nn.Sequential(
-                nn.Linear(7, hidden_dim // 2),
+                nn.Linear(7, 32),
                 nn.ReLU(),
-                nn.Linear(hidden_dim // 2, out_dim))
+                nn.Linear(32, out_dim)
+            )
         
         # radiomics branch with classifier
         if 'radiomics' in self.modality:
-            self.rad_norm = nn.LayerNorm(102)
-            self.tab_mil = GatedAttentionMIL_Tabular(input_dim=102, num_classes=4)
+            self.rad_feat_dim = 256
+            self.tab_mil = GatedAttentionMIL_Tabular(input_dim=800, hidden_dim=self.rad_feat_dim, num_classes=4)
         
         # metalesion branch with classifier
         if 'metalesion' in self.modality:
-            self.metalesion_dim = 36
             self.metalesion_classifier = nn.Sequential(
-                nn.Linear(self.metalesion_dim, hidden_dim // 2),
+                nn.Linear(36, 64),
                 nn.ReLU(),
-                nn.Linear(hidden_dim // 2, out_dim)
+                nn.Linear(64, out_dim)
             )
         
         num_modalities = ('image' in modality) + ('clinical' in modality) + ('radiomics' in modality) + ('metalesion' in modality)
@@ -397,6 +399,11 @@ class DecisionLevelLateFusionModel(nn.Module):
         if 'image' in self.modality:
             instances, _, _ = self.patcher.convert_img_to_bag(image.squeeze(0))
             instances = instances.unsqueeze(0).to(self.device)
+
+                # normalize instances with IMAGENET mean and std
+            instances = (instances - torch.tensor([0.485, 0.456, 0.406], device=self.device).view(1, 3, 1, 1)) / \
+                     torch.tensor([0.229, 0.224, 0.225], device=self.device).view(1, 3, 1, 1)
+
             image_pred, _ = self.mil(instances)
             # image_pred = self.image_classifier(image_feat.squeeze(0))
             predictions.append(image_pred)
@@ -406,8 +413,7 @@ class DecisionLevelLateFusionModel(nn.Module):
             predictions.append(clinical_pred)
             
         if 'radiomics' in self.modality:
-            rad_normed = self.rad_norm(radiomics_feat)
-            radiomics_pred, _ = self.tab_mil(rad_normed)
+            radiomics_pred, _ = self.tab_mil(radiomics_feat)
             predictions.append(radiomics_pred)
         
         if 'metalesion' in self.modality:
@@ -417,4 +423,5 @@ class DecisionLevelLateFusionModel(nn.Module):
         stacked_preds = torch.stack(predictions, dim=0)
         normalized_weights = F.softmax(self.modality_weights, dim=0)
         final_pred = (stacked_preds * normalized_weights.view(-1, 1, 1)).sum(dim=0)
+
         return final_pred
