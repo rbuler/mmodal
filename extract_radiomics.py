@@ -66,13 +66,18 @@ def main(df, output_path='radiomics.pkl', param_file='params.yml'):
     print(f"Features reduced: {global_feats.shape[1]} → {global_feats_reduced.shape[1]}")
 
     scaler = StandardScaler()
-    _ = scaler.fit_transform(global_feats_reduced)
+    global_feats_scaled = scaler.fit_transform(global_feats_reduced)
+
+    pca = PCA(n_components=0.95)
+    global_feats_pca = pca.fit_transform(global_feats_scaled)
+    print(f"PCA applied: {global_feats_scaled.shape[1]} → {global_feats_pca.shape[1]}")
 
     for patient_id, feats in all_features.items():
         if feats is not None:
             reduced = selector.transform(feats)
             scaled = scaler.transform(reduced)
-            all_features[patient_id] = scaled
+            pca_transformed = pca.transform(scaled)
+            all_features[patient_id] = pca_transformed
         else:
             all_features[patient_id] = None
 
@@ -86,6 +91,7 @@ if __name__ == "__main__":
     import yaml
     import typing
     import argparse
+    from sklearn.decomposition import PCA
 
     def get_args_parser(path: typing.Union[str, bytes, os.PathLike]):
         help = '''path to .yml config file
