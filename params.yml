@@ -93,7 +93,7 @@ setting: #----------------------------------------------------------------------
   label: 1                #[1]: Integer, label value of Region of Interest (ROI) in labelmap.
 
 # Image discretization https://discourse.slicer.org/t/binwidth-optimization/15996/2
-  binWidth: 25            # [25]: Float, > 0, size of the bins when making a histogram and for discretization of the image gray level.
+  binWidth: 10            # [25]: Float, > 0, size of the bins when making a histogram and for discretization of the image gray level.
   # binCount: 20              # [None]: integer, > 0, specifies the number of bins to create. The width of the bin is then determined by the range in the ROI. No definitive evidence is available on which method of discretization is superior, we advise a fixed bin width.
 
 # Forced 2D extraction
@@ -135,14 +135,14 @@ setting: #----------------------------------------------------------------------
 imageType: #---------------------------------------------------------------------------------------------------------
            # [None] values are not allowed, '{}' is interpreted as an empty dictionary
   Original: {}          # No filter applied
-  # Wavelet: {}           # Wavelet filtering
-  # LoG: {}               # Laplacian of Gaussian filter
-  # Square: {}            # Takes the square of the image intensities and linearly scales them back to the original range.
-  # SquareRoot: {}        # Takes the square root of the absolute image intensities and scales them back to original range.
-  # Logarithm: {}         # Takes the logarithm of the absolute intensity + 1.
-  # Exponential: {}       # Takes the the exponential, where filtered intensity is e^(absolute intensity).
-  # Gradient: {}          # Returns the magnitude of the local gradient.
-  # LBP2D: {}             # Computes the Local Binary Pattern in a by-slice operation (2D).
+  Wavelet: {}           # Wavelet filtering
+  LoG: {}               # Laplacian of Gaussian filter
+  Square: {}            # Takes the square of the image intensities and linearly scales them back to the original range.
+  SquareRoot: {}        # Takes the square root of the absolute image intensities and scales them back to original range.
+  Logarithm: {}         # Takes the logarithm of the absolute intensity + 1.
+  Exponential: {}       # Takes the the exponential, where filtered intensity is e^(absolute intensity).
+  Gradient: {}          # Returns the magnitude of the local gradient.
+  LBP2D: {}             # Computes the Local Binary Pattern in a by-slice operation (2D).
   # LBP3D: {}             # Computes the Local Binary Pattern in 3D using spherical harmonics.
 
 
