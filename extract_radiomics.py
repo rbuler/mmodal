@@ -68,7 +68,7 @@ def main(df, output_path='radiomics.pkl', param_file='params.yml'):
     scaler = StandardScaler()
     global_feats_scaled = scaler.fit_transform(global_feats_reduced)
 
-    pca = PCA(n_components=0.95)
+    pca = PCA(n_components=0.99)
     global_feats_pca = pca.fit_transform(global_feats_scaled)
     print(f"PCA applied: {global_feats_scaled.shape[1]} → {global_feats_pca.shape[1]}")
 
