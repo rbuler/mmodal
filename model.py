@@ -30,6 +30,11 @@ class GatedAttentionMILImage(nn.Module):
         self.shared_classifier = shared_classifier
         self.L = L
         self.D = D
+        self.L = 256
+        self.D = 64
+
+
+
 
         if pretrained:
             if backbone == 'r18':
@@ -46,6 +51,15 @@ class GatedAttentionMILImage(nn.Module):
 
         self.feature_extractor.fc = Identity()
         self.feature_dropout = nn.Dropout(feature_dropout)
+
+                # encoder 512 -> 256
+        self.encoder = nn.Sequential(
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Dropout(feature_dropout),
+        )
+
+
 
         if self.shared_attention:
             self.attention_V = nn.Sequential(nn.Linear(self.L, self.D), nn.Tanh())
@@ -79,9 +93,9 @@ class GatedAttentionMILImage(nn.Module):
 
         x = x.view(bs * num_instances, ch, w, h)
         H = self.feature_extractor(x)  # (bs*num_instances, L)
-        H = self.feature_dropout(H)
+        # H = self.feature_dropout(H)
         H = H.view(bs, num_instances, -1)  # (bs, num_instances, L)
-
+        H = self.encoder(H)  # (bs, num_instances, L)
         if self.shared_attention:
             A_V = self.attention_V(H)       # (bs, num_instances, D)
             A_U = self.attention_U(H)       # (bs, num_instances, D)
@@ -136,16 +150,19 @@ class MILTabular(nn.Module):
         self.shared_classifier = shared_classifier
 
         self.encoder = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
+            nn.Linear(input_dim, hidden_dim),   # e.g., 102 → 64
+            nn.ReLU(),
+            nn.Dropout(feature_dropout),
+            nn.Linear(hidden_dim, hidden_dim//2), # e.g., 64 → 32
             nn.ReLU(),
             nn.Dropout(feature_dropout)
         )
 
         if shared_classifier:
-            self.classifier = nn.Linear(hidden_dim, num_classes)
+            self.classifier = nn.Linear(hidden_dim//2, num_classes)
         else:
             self.classifiers = nn.ModuleList([
-                nn.Linear(hidden_dim, 1) for _ in range(num_classes)
+                nn.Linear(hidden_dim//2, 1) for _ in range(num_classes)
             ])
 
     def forward(self, x):
@@ -175,13 +192,13 @@ class IntermediateFusionModel(nn.Module):
                                           shared_attention=True,
                                           shared_classifier=self.shared_classifier)
         
-        self.tab_mil = MILTabular(input_dim=39,
+        self.tab_mil = MILTabular(input_dim=102,
                                   num_classes=out_dim,
                                   hidden_dim=64,
                                   shared_classifier=self.shared_classifier)
 
-        self.image_feat_dim = 512
-        self.rad_feat_dim = 64 if 'radiomics' in modality else 0
+        self.image_feat_dim = 256
+        self.rad_feat_dim = 32 if 'radiomics' in modality else 0
         self.clin_feat_dim = 32 if 'clinical' in modality else 0
         self.meta_feat_dim = 64 if 'metalesion' in modality else 0
 
@@ -197,24 +214,24 @@ class IntermediateFusionModel(nn.Module):
         )
 
         self.fusion_mlp = nn.Sequential(
-            nn.Linear(self.fusion_input_dim, 256),
+            nn.Linear(self.fusion_input_dim, 128),
             nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(256, 128),
+            nn.Dropout(0.1),
+            nn.Linear(128, 64),
             nn.ReLU()
         )
 
         if self.shared_classifier:
-            self.classifier = nn.Linear(128, out_dim)
+            self.classifier = nn.Linear(64, out_dim)
         else:
 
             self.classifier = nn.ModuleList([
-                nn.Linear(128, 1) for _ in range(out_dim)
+                nn.Linear(64, 1) for _ in range(out_dim)
             ])
 
         self.patcher = ImagePatcher(
             patch_size=128,
-            overlap=0.5,
+            overlap=0.75,
             empty_thresh=0.75,
             bag_size=-1
         )
@@ -249,7 +266,9 @@ class IntermediateFusionModel(nn.Module):
                 rad_i = rad_feats if rad_feats is not None else torch.empty(0, device=self.device)
                 clin_i = clinical_feat if clinical_feat is not None else torch.empty(0, device=self.device)
                 meta_i = metalesion_feat if metalesion_feat is not None else torch.empty(0, device=self.device)
-
+                print(image_feats)
+                print(radiomics_feat)
+                print(rad_feats)
                 fused_i = torch.cat([x for x in [img_i, rad_i, clin_i, meta_i] if x.numel() > 0], dim=-1)
                 fused_i = self.fusion_mlp(fused_i)  # [1, 128]
                 out_i = self.classifier(fused_i)  # [1, 4]
